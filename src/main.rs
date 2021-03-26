@@ -84,7 +84,7 @@ impl CommandExt for Command {
 fn check_status() -> Result<()> {
     let root = Command::git("rev-parse --show-toplevel").run_stdout()?;
     env::set_current_dir(root)?;
-    if Command::git("diff-index --quiet HEAD .").run_success()? {
+    if !Command::git("diff-index --quiet HEAD .").run_success()? {
         eprintln!("Working tree has changes.");
         Command::git("status --porcelain").run_success()?;
         if !Confirm::new()
@@ -178,6 +178,7 @@ fn commit_bump(next_version: &Version) -> Result<()> {
 }
 
 fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
+    let beta_minor_version = next_version.minor - 2;
     // Determine the version in rust-lang/rust beta branch.
     if !Command::git("fetch upstream --tags").run_success()? {
         eprintln!("error: failed to fetch rust upstream");
@@ -195,23 +196,32 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
     // Determine the rust-lang/cargo beta version.
     let last_branch_line = Command::git(&format!(
         "show-ref upstream/rust-1.{}.0",
-        next_version.minor - 2
+        beta_minor_version
     ))
     .run_stdout()?;
     let last_branch_hash = last_branch_line.split_whitespace().next().expect("hash");
 
     if last_beta_hash != last_branch_hash {
         eprintln!(
-            "error: rust-lang/rust beta branch hash {} does not equal \
+            "warning: rust-lang/rust beta branch hash {} does not equal \
             rust-lang/cargo upstream/rust-1.{}.0 hash {}",
-            last_beta_hash,
-            next_version.minor - 2,
-            last_branch_hash
+            last_beta_hash, beta_minor_version, last_branch_hash
         );
-        // TODO: make this recoverable
-        exit(1);
+        eprintln!(
+            "This may happen if changes are pushed to rust-1.{}.0 shortly after the beta \
+             branch was created. Please carefully inspect to verify that this is the case.
+            ",
+            beta_minor_version
+        );
+        if !Confirm::new()
+            .with_prompt("Do you want to continue?")
+            .default(true)
+            .interact()?
+        {
+            exit(1);
+        }
     }
-    let short_hash = &last_beta_hash[..8];
+    let start_of_beta_short_hash = &last_beta_hash[..8];
 
     let to_links = |prs: &[(u32, String, String)]| -> String {
         prs.iter()
@@ -232,7 +242,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
         matches[1].get(0).unwrap().as_str()
     );
     let beta_hash_start = matches[0].get(1).unwrap().as_str();
-    let beta_version = format!("rust-1.{}.0", next_version.minor - 2);
+    let beta_version = format!("rust-1.{}.0", beta_minor_version);
     let mut changelog = head_re
         .replace_all(
             &changelog,
@@ -241,7 +251,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
         .into_owned();
 
     // Determine changes in master (nightly).
-    let master_prs = find_prs(&changelog, short_hash, "upstream/master")?;
+    let master_prs = find_prs(&changelog, start_of_beta_short_hash, "upstream/master")?;
     // Determine changes in beta.
     let beta_prs = find_prs(
         &changelog,
@@ -272,7 +282,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
         \n\
         ",
             next_version.minor - 1,
-            HASH = short_hash,
+            HASH = start_of_beta_short_hash,
             LINKS = to_links(&master_prs),
             DATE = next_nightly_date(),
         ),
@@ -305,7 +315,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
 
     eprintln!(
         "Update the beta version 1.{}.0 and come back when finished.",
-        next_version.minor - 2
+        beta_minor_version
     );
     if !Confirm::new()
         .with_prompt("Ready to commit?")

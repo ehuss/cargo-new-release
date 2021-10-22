@@ -1,4 +1,3 @@
-#![feature(command_access)]
 use anyhow::{bail, format_err, Context, Result};
 use dialoguer::Confirm;
 use regex::Regex;
@@ -180,7 +179,10 @@ fn commit_bump(next_version: &Version) -> Result<()> {
 fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
     let beta_minor_version = next_version.minor - 2;
     // Determine the version in rust-lang/rust beta branch.
-    if !Command::git("fetch upstream --tags").run_success()? {
+    if !Command::git("fetch upstream --tags")
+        .current_dir(rust_repo)
+        .run_success()?
+    {
         eprintln!("error: failed to fetch rust upstream");
         exit(1);
     }
@@ -344,7 +346,7 @@ fn find_prs(changelog: &str, start: &str, end: &str) -> Result<Vec<(u32, String,
     let cmd = format!("log --first-parent {}...{}", start, end);
     let log = Command::git(&cmd).run_stdout()?;
     let commit_re = Regex::new("(?m)^commit ").unwrap();
-    let auto_merge_re = Regex::new("Auto merge of #([0-9]+)").unwrap();
+    let merge_re = Regex::new("(?:Auto merge of|Merge pull request) #([0-9]+)").unwrap();
     let commits = commit_re
         .split(&log)
         .filter(|commit| !commit.trim().is_empty())
@@ -355,14 +357,18 @@ fn find_prs(changelog: &str, start: &str, end: &str) -> Result<Vec<(u32, String,
                 .filter(|line| !line.trim().is_empty() && line.starts_with(' '))
                 .map(|line| line.trim());
             let first = lines.next().expect("auto");
-            let cap = auto_merge_re.captures(first).ok_or_else(|| {
+            let cap = merge_re.captures(first).ok_or_else(|| {
                 format_err!(
-                    "could not find \"Auto merge of #\" in line: {}\nhash: {}",
+                    "could not find \"{}\" in line: {}\nhash: {}",
+                    merge_re.as_str(),
                     first,
                     hash
                 )
             })?;
-            let pr_num: u32 = cap.get(1).expect("group").as_str().parse().expect("number");
+            let num_cap = cap.get(1).expect("group").as_str();
+            let pr_num: u32 = num_cap
+                .parse()
+                .with_context(|| format_err!("could not parse {}", num_cap))?;
             let descr = lines.next().unwrap_or("").to_string();
             let url = format!("https://github.com/rust-lang/cargo/pull/{}", pr_num);
             Ok((pr_num, url, descr))

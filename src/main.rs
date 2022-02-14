@@ -80,6 +80,7 @@ impl CommandExt for Command {
     }
 }
 
+/// Checks that the repo is ready to go.
 fn check_status() -> Result<()> {
     let root = Command::git("rev-parse --show-toplevel").run_stdout()?;
     env::set_current_dir(root)?;
@@ -111,6 +112,7 @@ fn check_status() -> Result<()> {
     Ok(())
 }
 
+/// Creates the `version-bump` branch.
 fn create_branch() -> Result<()> {
     if !Command::git("fetch upstream --tags").run_success()? {
         eprintln!("error: failed to fetch upstream");
@@ -136,6 +138,7 @@ fn create_branch() -> Result<()> {
     Ok(())
 }
 
+/// Updates the version in `Cargo.toml`.
 fn bump_version_toml() -> Result<Version> {
     // TODO: run some validation if dependent crates like crates-io need to be updated.
     let mut toml = fs::read_to_string("Cargo.toml")
@@ -153,6 +156,7 @@ fn bump_version_toml() -> Result<Version> {
     Ok(next_version)
 }
 
+/// Waits for the user to manually validate.
 fn wait_for_inspection() -> Result<()> {
     eprintln!("Check for any tests or rustc probing (usually target_info.rs) that can be updated.");
     if !Confirm::new()
@@ -165,6 +169,7 @@ fn wait_for_inspection() -> Result<()> {
     Ok(())
 }
 
+/// Commits the version bump.
 fn commit_bump(next_version: &Version) -> Result<()> {
     if !Command::git("commit -a -m")
         .arg(format!("Bump to {}", next_version))
@@ -176,6 +181,7 @@ fn commit_bump(next_version: &Version) -> Result<()> {
     Ok(())
 }
 
+/// Modifies `CHANGELOG.md` to include stubs for the given version.
 fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
     let beta_minor_version = next_version.minor - 2;
     // Determine the version in rust-lang/rust beta branch.
@@ -286,7 +292,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
             next_version.minor - 1,
             HASH = start_of_beta_short_hash,
             LINKS = to_links(&master_prs),
-            DATE = next_nightly_date(),
+            DATE = next_version_date(),
         ),
     );
     fs::write("CHANGELOG.md", changelog)?;
@@ -385,6 +391,7 @@ fn find_prs(changelog: &str, start: &str, end: &str) -> Result<Vec<(u32, String,
     Ok(new)
 }
 
+/// Commits the changelog update.
 fn commit_changelog(next_version: &Version) -> Result<()> {
     if !Command::git("commit -a -m")
         .arg(format!("Update changelog for 1.{}", next_version.minor - 2))
@@ -396,25 +403,31 @@ fn commit_changelog(next_version: &Version) -> Result<()> {
     Ok(())
 }
 
+/// Creates the PR.
 fn create_pr(next_vers: &Version) -> Result<()> {
     if !Command::git("push").run_success()? {
         eprintln!("error: failed to push");
         exit(1);
     }
-    // TODO: grab account name from origin
-    open_browser(&["https://github.com/ehuss/cargo/pull/new/version-bump"])?;
+    let origin = Command::git("remote get-url origin").run_stdout()?;
+    let user_re = Regex::new(r"([a-zA-Z0-9-]+)/cargo").unwrap();
+    let user_cap = user_re.captures(&origin).expect("user in origin");
+    let username = &user_cap[1];
+    open_browser(&[&format!(
+        "https://github.com/{username}/cargo/pull/new/version-bump"
+    )])?;
     // TODO: Use github API (or maybe query-strings?) to set title
     eprintln!("title:\nBump to {}, update changelog", next_vers);
     Ok(())
 }
 
-fn next_nightly_date() -> String {
+fn next_version_date() -> String {
     let first = time::date!(2015 - 05 - 15); // 1.0.0 release date
     let now = time::OffsetDateTime::now_utc().date();
     let releases = (now.julian_day() - first.julian_day()) / 42;
-    let next_nightly_days = (releases + 2) * 42;
-    let next_nightly = time::Date::from_julian_day(next_nightly_days + first.julian_day() - 1);
-    next_nightly.format("%Y-%m-%d")
+    let next_version_days = (releases + 2) * 42;
+    let next_version = time::Date::from_julian_day(next_version_days + first.julian_day() - 1);
+    next_version.format("%Y-%m-%d")
 }
 
 fn doit() -> Result<()> {

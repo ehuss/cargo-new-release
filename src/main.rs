@@ -219,7 +219,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
             next_version.minor - 1,
             HASH = start_of_beta_short_hash,
             LINKS = to_links(&master_prs),
-            DATE = next_version_date(),
+            DATE = next_version_date(next_version),
         ),
     );
     fs::write("CHANGELOG.md", changelog)?;
@@ -320,13 +320,11 @@ fn create_pr(next_vers: &Version) -> Result<()> {
     Ok(())
 }
 
-fn next_version_date() -> String {
+fn next_version_date(next_vers: &Version) -> String {
     let first = time::date!(2015 - 05 - 15); // 1.0.0 release date
-    let now = time::OffsetDateTime::now_utc().date();
-    let releases = (now.julian_day() - first.julian_day()) / 42;
-    let next_version_days = (releases + 2) * 42;
-    let next_version = time::Date::from_julian_day(next_version_days + first.julian_day() - 1);
-    next_version.format("%Y-%m-%d")
+    let next_days = ((next_vers.minor - 1) * 42) as i64;
+    let next_date = time::Date::from_julian_day(first.julian_day() + next_days - 1);
+    next_date.format("%Y-%m-%d")
 }
 
 fn doit() -> Result<()> {

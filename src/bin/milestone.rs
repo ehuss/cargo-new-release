@@ -17,7 +17,7 @@ fn fetch(rust_repo: &Path) -> Result<()> {
 
 /// Determine which PRs need to be milestoned.
 fn determine_milestones(auth: &str, rust_repo: &Path) -> Result<HashMap<String, Vec<u32>>> {
-    let log = Command::git("log -n 100 --format=%H src/tools/cargo")
+    let log = Command::git("log --remotes=upstream -n 100 --format=%H src/tools/cargo")
         .current_dir(rust_repo)
         .run_stdout()?;
     let subproject_re = Regex::new("Subproject commit ([0-9a-f]+)").unwrap();

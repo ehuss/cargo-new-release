@@ -278,8 +278,7 @@ fn open_browser(urls: &[&str]) -> Result<()> {
 fn find_prs(changelog: &str, start: &str, end: &str) -> Result<Vec<(u32, String, String)>> {
     let cmd = format!("log --first-parent {}...{}", start, end);
     let log = Command::git(&cmd).run_stdout()?;
-    let commits = cargo_new_release::commits_in_log(&log)
-        .with_context(|| format_err!("failed on `git {}`", cmd))?;
+    let commits = cargo_new_release::commits_in_log(&log);
 
     let (dupe, new): (Vec<_>, Vec<_>) = commits
         .into_iter()

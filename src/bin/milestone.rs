@@ -17,12 +17,13 @@ fn fetch(rust_repo: &Path) -> Result<()> {
 
 /// Determine which PRs need to be milestoned.
 fn determine_milestones(auth: &str, rust_repo: &Path) -> Result<HashMap<String, Vec<u32>>> {
-    let log = Command::git("log --remotes=upstream -n 100 --format=%H src/tools/cargo")
+    let log = Command::git("log --remotes=upstream -n 5 --format=%H src/tools/cargo")
         .current_dir(rust_repo)
         .run_stdout()?;
     let subproject_re = Regex::new("Subproject commit ([0-9a-f]+)").unwrap();
     let mut to_milestone = HashMap::new();
     for hash in log.lines() {
+        eprintln!("checking {hash}");
         let diff = Command::git(&format!("show -p {hash} src/tools/cargo"))
             .current_dir(rust_repo)
             .run_stdout()?;
@@ -36,9 +37,8 @@ fn determine_milestones(auth: &str, rust_repo: &Path) -> Result<HashMap<String, 
         ))
         .current_dir(rust_repo.join("src/tools/cargo"))
         .run_stdout()?;
-        let commits = cargo_new_release::commits_in_log(&log)?;
+        let commits = cargo_new_release::commits_in_log(&log);
         assert!(!commits.is_empty());
-        let mut found = false;
         for (pr_num, _, _) in commits {
             if let Some((_milestone_number, milestone_title)) = current_milestone(auth, pr_num)? {
                 if milestone_title == version {
@@ -50,10 +50,6 @@ fn determine_milestones(auth: &str, rust_repo: &Path) -> Result<HashMap<String, 
             }
             let to_mile_prs: &mut Vec<u32> = to_milestone.entry(version.to_string()).or_default();
             to_mile_prs.push(pr_num);
-            found = true;
-        }
-        if !found {
-            break;
         }
     }
     Ok(to_milestone)

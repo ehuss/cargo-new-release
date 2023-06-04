@@ -70,7 +70,7 @@ fn bump_version_toml() -> Result<Version> {
     // TODO: run some validation if dependent crates like crates-io need to be updated.
     let mut toml = fs::read_to_string("Cargo.toml")
         .with_context(|| format_err!("failed to read Cargo.toml"))?;
-    let version_start = toml.find("version = \"").expect("version") + 11;
+    let version_start = toml.find("\nversion = \"").expect("version") + 12;
     let len = toml[version_start..].find('"').expect("version end");
     let version = Version::parse(&toml[version_start..version_start + len]).expect("valid version");
     assert_eq!(version.major, 0);

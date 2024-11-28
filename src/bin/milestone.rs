@@ -184,8 +184,9 @@ fn doit() -> Result<()> {
         .skip(1)
         .next()
         .ok_or_else(|| format_err!("expected path to rust repo as first argument"))?;
-    let token = env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set");
-    let auth = base64::encode(format!("ehuss:{token}"));
+    let token =
+        env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set in <username>:<token> format");
+    let auth = base64::encode(token);
     let rust_repo = Path::new(&rust_repo);
     fetch(&rust_repo)?;
     let milestones = determine_milestones(&auth, &rust_repo)?;

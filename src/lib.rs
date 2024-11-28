@@ -79,7 +79,8 @@ impl CommandExt for Command {
 /// Returns Vec of `(pr_num, pr_url, pr_description)` tuples.
 pub fn commits_in_log(log: &str) -> Vec<(u32, String, String)> {
     let commit_re = Regex::new("(?m)^commit ").unwrap();
-    let merge_re = Regex::new("(?:Auto merge of|Merge pull request) #([0-9]+)").unwrap();
+    let merge_re =
+        Regex::new(r"(?:Auto merge of|Merge pull request) #([0-9]+)|\(#([0-9]+)\)$").unwrap();
     commit_re
         .split(&log)
         .filter(|commit| !commit.trim().is_empty())
@@ -102,12 +103,18 @@ pub fn commits_in_log(log: &str) -> Vec<(u32, String, String)> {
                     return None;
                 }
             };
-            let num_cap = cap.get(1).expect("group").as_str();
-            let pr_num: u32 = match num_cap.parse() {
-                Ok(n) => n,
-                Err(e) => panic!("could not parse {}: {}", num_cap, e),
+            let (cap, descr) = match (cap.get(1), cap.get(2)) {
+                (Some(cap), _) => (cap, lines.next().unwrap_or_default().to_string()),
+                (_, Some(cap)) => {
+                    let mut pr_title = first.to_string();
+                    // Remove `(#    )` part
+                    let range = (cap.range().start - 2)..=(cap.range().end);
+                    pr_title.replace_range(range, "");
+                    (cap, pr_title.trim_end().to_string())
+                }
+                (None, None) => panic!("cannot found PR number: {first}"),
             };
-            let descr = lines.next().unwrap_or("").to_string();
+            let pr_num = cap.as_str().parse::<u32>().expect("digits only");
             let url = format!("https://github.com/rust-lang/cargo/pull/{}", pr_num);
             Some((pr_num, url, descr))
         })

@@ -7,6 +7,8 @@ use std::env;
 use std::fs;
 use std::process::{exit, Command};
 
+const CHANGELOG_PATH: &str = "src/doc/src/CHANGELOG.md";
+
 /// Checks that the repo is ready to go.
 fn check_status() -> Result<()> {
     let root = Command::git("rev-parse --show-toplevel").run_stdout()?;
@@ -166,10 +168,10 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
     };
 
     // Update last version.
-    let changelog = fs::read_to_string("CHANGELOG.md")
+    let changelog = fs::read_to_string(CHANGELOG_PATH)
         .with_context(|| format_err!("failed to read CHANGELOG.md"))?;
 
-    let head_re = Regex::new(r"([a-f0-9]+)\.\.\.HEAD").unwrap();
+    let head_re = Regex::new(r"(66221abd)\.\.\.rust-1\.84\.0").unwrap();
     let matches: Vec<_> = head_re.captures_iter(&changelog).collect();
     assert_eq!(matches.len(), 2);
     assert_eq!(
@@ -222,7 +224,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
             DATE = next_version_date(next_version),
         ),
     );
-    fs::write("CHANGELOG.md", changelog)?;
+    fs::write(CHANGELOG_PATH, changelog)?;
 
     let master_urls: Vec<_> = master_prs
         .iter()

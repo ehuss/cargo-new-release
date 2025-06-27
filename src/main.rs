@@ -171,7 +171,7 @@ fn prep_changelog(next_version: &Version, rust_repo: &str) -> Result<()> {
     let changelog = fs::read_to_string(CHANGELOG_PATH)
         .with_context(|| format_err!("failed to read CHANGELOG.md"))?;
 
-    let head_re = Regex::new(r"(66221abd)\.\.\.rust-1\.84\.0").unwrap();
+    let head_re = Regex::new(r"([a-f0-9]+)\.\.\.HEAD").unwrap();
     let matches: Vec<_> = head_re.captures_iter(&changelog).collect();
     assert_eq!(matches.len(), 2);
     assert_eq!(
